@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>DDM Ramp Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: two columns on wide screens — the setup (inputs) on the left, the read (results) on the right.
+   Phones stack them and pin the four headline numbers to a bar at the bottom. */
+:root{
+  --bg:#eef1ee;        /* page: grey with a faint felt-green bias */
+  --surface:#ffffff;
+  --sunk:#e3e8e4;
+  --ink:#16231d;
+  --muted:#5b6a63;
+  --line:#cfd8d2;
+  --accent:#1e6b4c;    /* felt green, used for controls and focus */
+  --accent-ink:#ffffff;
+  --gain:#1d6fa5;      /* chart: hands that make money */
+  --loss:#d0702c;      /* chart: hands that cost money */
+  --warn:#9a5b00;
+  --display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;
+  --body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1512;--surface:#16201b;--sunk:#1d2a24;--ink:#e4ece7;--muted:#90a39a;--line:#2b3a33;
+  --accent:#4fae86;--accent-ink:#08130e;--gain:#4a9ad4;--loss:#c46e2c;--warn:#e0a54a;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1512;--surface:#16201b;--sunk:#1d2a24;--ink:#e4ece7;--muted:#90a39a;--line:#2b3a33;
+  --accent:#4fae86;--accent-ink:#08130e;--gain:#4a9ad4;--loss:#c46e2c;--warn:#e0a54a;color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body);padding:0 16px;-webkit-text-size-adjust:100%}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 96px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 16px;margin-bottom:18px}
+h1{font:800 clamp(30px,5vw,44px)/1 var(--display);letter-spacing:.01em;margin:0;text-transform:uppercase}
+header p{margin:0;color:var(--muted);font-size:13px;max-width:52ch}
+.grid{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+
+/* ---- setup ---- */
+.setup{display:flex;flex-direction:column;gap:14px}
+fieldset{border:1px solid var(--line);border-radius:10px;background:var(--surface);margin:0;padding:12px 14px 14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+legend{font:600 11px/1 var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:0 6px}
+.f{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}
+.f>label,.lab{font-size:14px}
+.hint{font-size:12px;color:var(--muted);line-height:1.4}
+select,input[type=number]{font:500 14px var(--mono);color:var(--ink);background:var(--sunk);border:1px solid var(--line);border-radius:7px;padding:7px 9px;min-width:0}
+input[type=number]{width:96px;text-align:right}
+input[type=number].sm{width:68px}
+select{width:100%}
+.seg{display:flex;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:transparent;color:var(--ink);font:500 13px var(--body);padding:7px 6px;border-radius:6px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.check{display:flex;align-items:center;gap:8px;font-size:14px;flex-wrap:wrap}
+.check input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
+.inline{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:14px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.ramp{display:flex;flex-direction:column;gap:6px}
+.rrow{display:grid;grid-template-columns:auto 1fr auto 1fr auto;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.rrow input{width:100%}
+.rrow .x{border:0;background:transparent;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;padding:4px 6px;border-radius:6px}
+.rrow .x:hover{background:var(--sunk);color:var(--ink)}
+.base{font-size:13px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:500 12px var(--mono);padding:5px 9px;border-radius:999px;cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+.add{align-self:flex-start;border:1px dashed var(--line);background:transparent;color:var(--accent);font:600 13px var(--body);padding:6px 10px;border-radius:7px;cursor:pointer}
+
+/* ---- the read ---- */
+.read{display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+.panel h2{font:600 11px/1 var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+.head{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.head>div{background:var(--surface);padding:14px 14px 12px;min-width:0}
+.k{font:600 11px/1.2 var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.big{font:800 clamp(30px,4.2vw,42px)/1.05 var(--display);margin-top:6px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sub{font:400 12px/1.35 var(--mono);color:var(--muted);margin-top:4px}
+@media (max-width:560px){.head{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:640px){.cols{grid-template-columns:minmax(0,1fr)}}
+dl{margin:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px 12px;font-size:14px}
+dt{color:var(--muted)}
+dd{margin:0;font:500 14px var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.status{display:inline-flex;align-items:center;gap:6px;font:600 12px var(--body);padding:3px 9px;border-radius:999px;border:1px solid var(--line)}
+.status.bad{color:var(--warn);border-color:var(--warn)}
+.note{font-size:12.5px;color:var(--muted);margin:10px 0 0;line-height:1.45}
+.note b{color:var(--ink);font-weight:600}
+
+/* chart */
+.chart{position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .tick{font:400 11px var(--mono);fill:var(--muted)}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .zero{stroke:var(--muted);stroke-width:1}
+.chart .gain{fill:var(--gain)} .chart .loss{fill:var(--loss)}
+.chart .hit{fill:transparent;cursor:crosshair}
+.chart .hit:hover+.bar,.chart .bar.on{opacity:.75}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font:400 12px/1.45 var(--mono);padding:7px 9px;border-radius:7px;white-space:nowrap;transform:translate(-50%,-100%);margin-top:-8px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+details{margin-top:10px;font-size:13px}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.tbl{overflow-x:auto;margin-top:8px}
+table{border-collapse:collapse;width:100%;font:400 12.5px var(--mono);font-variant-numeric:tabular-nums}
+th,td{padding:5px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+
+.loading{padding:40px 16px;text-align:center;color:var(--muted)}
+.dock{display:none}
+@media (max-width:860px){
+  .dock{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));position:fixed;left:0;right:0;bottom:0;z-index:5;
+    background:var(--surface);border-top:1px solid var(--line);padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));gap:6px}
+  .dock div{min-width:0;text-align:center}
+  .dock .v{font:800 20px/1.1 var(--display);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .dock .k{font-size:9.5px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>DDM Ramp Calculator</h1>
+    <p>Double Down Madness, heads-up, Hi-Lo exact true count. Every figure comes from a replay of simulated shoes, so ramps, exits and penetration interact the way they do at a real table.</p>
+  </header>
+
+  <div class="grid">
+    <!-- ================= SETUP ================= -->
+    <form class="setup" id="setup" autocomplete="off" onsubmit="return false">
+      <fieldset>
+        <legend>Table</legend>
+        <div class="lab">Version</div>
+        <div class="seg" role="group" aria-label="Version" id="ver">
+          <button type="button" data-v="V1">V1 · suited BJ 2:1</button>
+          <button type="button" data-v="V2">V2 · all BJ 3:2</button>
+        </div>
+        <div class="lab">Decks</div>
+        <div class="seg" role="group" aria-label="Decks" id="decks">
+          <button type="button" data-v="2">2</button>
+          <button type="button" data-v="6">6</button>
+          <button type="button" data-v="8">8</button>
+        </div>
+        <div class="f"><label for="pen">Penetration (% dealt)</label><input type="number" id="pen" step="0.5"></div>
+        <input type="range" id="penr" step="0.5" aria-label="Penetration slider">
+        <div class="hint" id="penhint"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Strategy</legend>
+        <div class="seg" role="group" aria-label="Strategy" id="dev">
+          <button type="button" data-v="basic">Basic strategy</button>
+          <button type="button" data-v="top10">+ top 10 deviations</button>
+        </div>
+        <label class="check"><input type="checkbox" id="ins"> Take insurance at TC ≥ <input type="number" class="sm" id="insi" step="0.5"></label>
+        <div class="hint">Insurance index measured at +2.9 for six decks.</div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Bet ramp</legend>
+        <div class="chips" id="presets"></div>
+        <div class="base">Below the first step you bet <b>1 unit</b>.</div>
+        <div class="ramp" id="ramp"></div>
+        <button type="button" class="add" id="addrow">+ Add a step</button>
+        <div class="hint">Steps are in exact true count (running count ÷ decks left). Each step applies at that count and above.</div>
+      </fieldset>
+
+      <fieldset>
+        <legend>When you play</legend>
+        <label class="check"><input type="checkbox" id="exit"> Leave when TC ≤ <input type="number" class="sm" id="exitv" step="0.5"></label>
+        <div class="inline" style="padding-left:26px">once <input type="number" class="sm" id="exita" step="0.5" aria-label="Decks dealt before the exit rule applies"> decks are dealt</div>
+        <label class="check" style="padding-left:26px"><input type="checkbox" id="exitbon"> but play out the shoe after <input type="number" class="sm" id="exitb" step="0.5" aria-label="Decks dealt after which you stop leaving"> decks dealt</label>
+        <label class="check"><input type="checkbox" id="wong"> Only bet when TC ≥ <input type="number" class="sm" id="wongv" step="0.5"></label>
+        <div class="hint">The second option is back-counting (wonging in): you watch the other hands. Results are then per hand dealt, not per hand played.</div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Money</legend>
+        <div class="f"><label for="unit">Base unit ($)</label><input type="number" id="unit" min="1" step="5"></div>
+        <div class="f"><label for="bank">Bankroll ($)</label><input type="number" id="bank" min="0" step="1000"></div>
+        <div class="f"><label for="hph">Hands per hour</label><input type="number" id="hph" min="10" step="10"></div>
+        <div class="f"><label for="trip">Trip length (hours)</label><input type="number" id="trip" min="1" step="1"></div>
+      </fieldset>
+    </form>
+
+    <!-- ================= READ ================= -->
+    <section class="read" id="read" aria-live="polite">
+      <div class="loading" id="loading">Loading shoe data…</div>
+      <div id="out" hidden>
+        <div class="head" style="margin-bottom:14px">
+          <div><div class="k">Win rate</div><div class="big" id="o-u">–</div><div class="sub" id="o-u2">units / 100 hands</div></div>
+          <div><div class="k">Hourly</div><div class="big" id="o-hr">–</div><div class="sub" id="o-hr2"></div></div>
+          <div><div class="k">N₀</div><div class="big" id="o-n0">–</div><div class="sub" id="o-n02"></div></div>
+          <div><div class="k">Risk of ruin</div><div class="big" id="o-ror">–</div><div class="sub" id="o-ror2"></div></div>
+        </div>
+
+        <div class="cols">
+          <div class="panel">
+            <h2>Per 100 hands</h2>
+            <dl>
+              <dt>Win rate</dt><dd id="d-u"></dd>
+              <dt>Standard deviation</dt><dd id="d-sd"></dd>
+              <dt>Desirability index (DI)</dt><dd id="d-di"></dd>
+              <dt>Average bet</dt><dd id="d-avg"></dd>
+              <dt>Hands at your top bet</dt><dd id="d-top"></dd>
+              <dt id="d-hpsk">Hands played per shoe</dt><dd id="d-hps"></dd>
+              <dt>Shoes you leave early</dt><dd id="d-left"></dd>
+            </dl>
+          </div>
+          <div class="panel">
+            <h2>Bankroll</h2>
+            <dl>
+              <dt>Bankroll in units</dt><dd id="b-units"></dd>
+              <dt>Full Kelly bankroll</dt><dd id="b-kelly"></dd>
+              <dt>For 5% risk of ruin</dt><dd id="b-5"></dd>
+              <dt>For 2% risk of ruin</dt><dd id="b-2"></dd>
+              <dt>For 1% risk of ruin</dt><dd id="b-1"></dd>
+              <dt>Unit for 2% risk on your bankroll</dt><dd id="b-u2"></dd>
+              <dt>Hours to N₀</dt><dd id="b-n0h"></dd>
+            </dl>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:14px">
+          <h2 id="t-h">Trip</h2>
+          <dl>
+            <dt>Expected result</dt><dd id="t-ev"></dd>
+            <dt>One standard deviation</dt><dd id="t-sd"></dd>
+            <dt>Chance of finishing the trip down</dt><dd id="t-down"></dd>
+            <dt>Trip bankroll, 95% sure to cover the worst dip</dt><dd id="t-95"></dd>
+            <dt>Trip bankroll, 99% sure</dt><dd id="t-99"></dd>
+          </dl>
+          <p class="note">Trip figures use a normal approximation. The bootstrapped shoe simulation came out about 3% higher at the 99% level, because big redoubled hands fatten the tails.</p>
+        </div>
+
+        <div class="panel" style="margin-top:14px">
+          <h2>Where the money comes from</h2>
+          <div class="chart" id="chart"></div>
+          <div class="legend"><span><i style="background:var(--gain)"></i>counts that make money</span><span><i style="background:var(--loss)"></i>counts that cost money</span></div>
+          <p class="note" id="c-note"></p>
+          <details><summary>Table view</summary><div class="tbl" id="ctable"></div></details>
+        </div>
+
+        <p class="note" style="margin-top:14px"><b>How this works.</b> Edge and variance at each true count come from 34–96 million simulated rounds per game version and deck count (basic strategy matches the Wizard of Odds chart). Those are replayed over 9,000–30,000 sampled shoes for this deck count, cut at your penetration, with your ramp and exit applied. Expect about ±3% sampling noise on u/100 and N₀. Risk of ruin assumes you never resize your unit. Not modelled: other players at the table, true-count rounding, and errors.</p>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="dock" id="dock" aria-hidden="true">
+  <div><div class="k">u/100</div><div class="v" id="k-u">–</div></div>
+  <div><div class="k">$/hour</div><div class="v" id="k-hr">–</div></div>
+  <div><div class="k">N₀</div><div class="v" id="k-n0">–</div></div>
+  <div><div class="k">RoR</div><div class="v" id="k-ror">–</div></div>
+</div>
+
+<script>
+'use strict';
+/* ---------------- state ---------------- */
+const PEN={2:[50,80,75],6:[50,93,83.3],8:[50,95,87.5]};          // min, max, default
+const EXITA={2:0.5,6:2,8:2};
+const PRESETS=[
+  {name:'1-2-4-6',  r:[[1,2],[2,4],[3,6]]},
+  {name:'1-2-4-8',  r:[[1,2],[2,4],[3,8]]},
+  {name:'1-3-5-8 from +2', r:[[2,3],[3,5],[4,8]]},
+  {name:'1-2-4-8-12', r:[[1,2],[2,4],[3,8],[4,12]]},
+  {name:'1-3-5-8-12 from +2', r:[[2,3],[3,5],[4,8],[5,12]]},
+  {name:'Flat', r:[]}];
+const DEF={ver:'V1',decks:6,pen:83.3,dev:'top10',ins:false,insi:3,ramp:[[2,3],[3,5],[4,8],[5,12]],
+  exit:true,exitv:-3,exita:2,exitbon:false,exitb:4,wong:false,wongv:1,unit:25,bank:30000,hph:100,trip:10};
+let st=Object.assign({},DEF);
+try{const s=JSON.parse(localStorage.getItem('ddm-calc')||'null'); if(s&&typeof s==='object') st=Object.assign(st,s);}catch(e){}
+const save=()=>{try{localStorage.setItem('ddm-calc',JSON.stringify(st));}catch(e){}};
+
+/* ---------------- data ---------------- */
+let EDGE=null; const PATH={};
+async function gunzip(b64){
+  const bin=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+  const ds=new DecompressionStream('gzip');
+  const buf=await new Response(new Blob([bin]).stream().pipeThrough(ds)).arrayBuffer();
+  return new Uint8Array(buf);
+}
+async function load(){
+  const res=await fetch('ddm-data.json'); const J=await res.json();
+  EDGE=J.edges;
+  for(const nd of ['2','6','8']){
+    const p=J.paths[nd], raw=await gunzip(p.b64), n=p.n;
+    const q=new Int16Array(raw.buffer.slice(0,2*n)), d=raw.subarray(2*n,3*n);   // TC ×100, then cards per round
+    const tc=new Float32Array(n), pos=new Uint16Array(n), starts=[];
+    let c=0;
+    for(let i=0;i<n;i++){ tc[i]=q[i]/100; if(d[i]===0){c=0;starts.push(i);} else c+=d[i]; pos[i]=c; }
+    starts.push(n);
+    PATH[nd]={tc,pos,starts:Int32Array.from(starts)};
+  }
+}
+
+/* ---------------- math ---------------- */
+function Phi(x){ // standard normal CDF
+  const t=1/(1+0.2316419*Math.abs(x)), y=0.3989422804014327*Math.exp(-x*x/2)*t*(0.31938153+t*(-0.356563782+t*(1.781477937+t*(-1.821255978+t*1.330274429))));
+  return x>=0?1-y:y;
+}
+function compute(s){
+  const P=PATH[s.decks], T=EDGE.t[s.decks+s.ver][s.dev], ev=T.ev, va=T.var, LO=EDGE.lo, ST=EDGE.step, NB=EDGE.n;
+  const NC=52*s.decks, cut=Math.round(s.pen/100*NC), exA=s.exita*52, exB=s.exitbon?s.exitb*52:1e9;
+  const ramp=s.ramp.filter(r=>isFinite(r[0])&&isFinite(r[1])&&r[1]>0).slice().sort((a,b)=>a[0]-b[0]);
+  const top=ramp.length?ramp[ramp.length-1][1]:1;
+  const bins={}; const binOf=t=>Math.max(-4,Math.min(9,Math.floor(t)));
+  let sumE=0,sumV=0,sumE2=0,nPlay=0,nDeal=0,shoes=0,left=0,sumBet=0,nTop=0;
+  const {tc,pos,starts}=P;
+  for(let k=0;k<starts.length-1;k++){
+    let sE=0,sV=0; shoes++;
+    for(let i=starts[k];i<starts[k+1];i++){
+      if(pos[i]>=cut) break;
+      const t=tc[i];
+      if(s.exit && pos[i]>=exA && pos[i]<exB && t<=s.exitv){ left++; break; }
+      nDeal++;
+      if(s.wong && t<s.wongv) continue;
+      let u=1; for(const r of ramp){ if(t>=r[0]) u=r[1]; }
+      let j=Math.round((t-LO)/ST); j=j<0?0:j>=NB?NB-1:j;
+      let e=u*ev[j], v=u*u*va[j];
+      if(s.ins && t>=s.insi){ const pA=Math.max(0,(4+0.1*t)/52); e+=u*pA*0.5*0.0245*(t-2.93); v+=u*u*pA*0.5; }
+      sE+=e; sV+=v; nPlay++; sumBet+=u; if(u===top&&ramp.length) nTop++;
+      const b=binOf(t); const o=bins[b]||(bins[b]={n:0,e:0,u:0,edge:0}); o.n++; o.e+=e; o.u+=u; o.edge+=ev[j];
+    }
+    sumE+=sE; sumV+=sV; sumE2+=sE*sE;
+  }
+  const denomN=s.wong?nDeal:nPlay;
+  const mu=sumE/denomN;
+  const varShoe=sumV/shoes + (sumE2/shoes-(sumE/shoes)**2);
+  const vh=varShoe/(denomN/shoes);
+  return {mu,vh,nPlay,nDeal,shoes,left,avgBet:sumBet/nPlay,topShare:ramp.length?nTop/nPlay:0,
+          hps:nPlay/shoes,hpsDeal:nDeal/shoes,bins,denomN,top};
+}
+function tripBank(mu,vh,n,p){ // bankroll B with P(max drawdown from start >= B within n hands) = 1-p
+  const m=mu*n, sd=Math.sqrt(vh*n);
+  const ruin=B=>Phi((-B-m)/sd)+Math.exp(Math.min(700,-2*mu*B/vh))*Phi((-B+m)/sd);
+  let lo=0,hi=10*sd+Math.abs(m);
+  for(let i=0;i<80;i++){const mid=(lo+hi)/2; if(ruin(mid)>1-p) lo=mid; else hi=mid;}
+  return (lo+hi)/2;
+}
+
+/* ---------------- formatting ---------------- */
+const nf=(x,d=0)=>isFinite(x)?x.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}):'–';
+const usd=(x,d=0)=>isFinite(x)?(x<0?'−$':'$')+nf(Math.abs(x),d):'–';
+const sgn=(x,d)=>isFinite(x)?(x>=0?'+':'−')+nf(Math.abs(x),d):'–';
+const pct=x=>!isFinite(x)?'–':x<0.0001?'<0.01%':x<0.01?nf(100*x,2)+'%':x<0.1?nf(100*x,1)+'%':nf(100*x,0)+'%';
+const $=id=>document.getElementById(id);
+const set=(id,v)=>{$(id).textContent=v;};
+
+/* ---------------- render results ---------------- */
+function render(){
+  if(!EDGE) return;
+  const r=compute(st), U=st.unit, H=st.hph;
+  const mu=r.mu, vh=r.vh, pos=mu>0;
+  const N0=pos?vh/mu/mu:Infinity, K=pos?vh/mu:Infinity, Bu=st.bank/U;
+  const ror=pos?Math.exp(-2*Bu/K):1;
+  const per=st.wong?'per 100 hands dealt':'per 100 hands played';
+  set('o-u',sgn(100*mu,2)); set('o-u2','units '+per);
+  set('o-hr',usd(mu*H*U)); set('o-hr2','SD '+usd(Math.sqrt(vh*H)*U)+' / hour');
+  set('o-n0',pos?nf(N0):'–'); set('o-n02',pos?nf(N0/H,0)+' hours at '+H+'/hr':'not reached: this setup loses');
+  set('o-ror',pos?pct(ror):'100%'); set('o-ror2',pos?'on '+usd(st.bank)+' at '+usd(U)+' units':'negative expectation');
+  set('k-u',sgn(100*mu,2)); set('k-hr',usd(mu*H*U)); set('k-n0',pos?nf(N0):'–'); set('k-ror',pos?pct(ror):'100%');
+
+  set('d-u',sgn(100*mu,2)+' u · '+usd(100*mu*U));
+  set('d-sd',nf(10*Math.sqrt(vh),1)+' u · '+usd(10*Math.sqrt(vh)*U));
+  set('d-di',pos?nf(1000/Math.sqrt(N0),1):'–');
+  set('d-avg',nf(r.avgBet,2)+' u');
+  set('d-top',r.topShare?nf(100*r.topShare,1)+'%':'–');
+  set('d-hpsk',st.wong?'Hands bet / dealt per shoe':'Hands played per shoe');
+  set('d-hps',st.wong?nf(r.hps,1)+' / '+nf(r.hpsDeal,1):nf(r.hps,1));
+  set('d-left',st.exit?nf(100*r.left/r.shoes,0)+'%':'–');
+
+  set('b-units',nf(Bu,0)+' u');
+  const need=x=>pos?usd(K*Math.log(1/x)/2*U):'–';
+  set('b-kelly',pos?usd(K*U)+' · '+nf(K,0)+' u':'–');
+  set('b-5',need(0.05)); set('b-2',need(0.02)); set('b-1',need(0.01));
+  set('b-u2',pos?usd(st.bank/(K*Math.log(50)/2),2):'–');
+  set('b-n0h',pos?nf(N0/H,0)+' h':'–');
+
+  const n=H*st.trip, tm=mu*n, tsd=Math.sqrt(vh*n);
+  set('t-h','Trip · '+st.trip+' hours · '+nf(n)+' hands');
+  set('t-ev',sgn(tm,0)+' u · '+usd(tm*U));
+  set('t-sd',nf(tsd,0)+' u · '+usd(tsd*U));
+  set('t-down',pct(Phi(-tm/tsd)));
+  set('t-95',pos?usd(tripBank(mu,vh,n,0.95)*U)+' · '+nf(tripBank(mu,vh,n,0.95),0)+' u':'–');
+  set('t-99',pos?usd(tripBank(mu,vh,n,0.99)*U)+' · '+nf(tripBank(mu,vh,n,0.99),0)+' u':'–');
+
+  chart(r);
+  $('loading').hidden=true; $('out').hidden=false;
+}
+
+/* ---------------- chart: EV contribution by true count ---------------- */
+function chart(r){
+  const keys=[]; for(let b=-4;b<=9;b++) keys.push(b);
+  const D=keys.map(b=>{const o=r.bins[b]||{n:0,e:0,u:0,edge:0};
+    return {b,lab:b===-4?'≤−4':b===9?'≥+9':(b>0?'+':b<0?'−':'')+Math.abs(b),share:o.n/r.denomN,
+            contrib:100*o.e/r.denomN, bet:o.n?o.u/o.n:0, edge:o.n?100*o.edge/o.n:0};});
+  const W=640,Hh=230,ml=44,mr=8,mt=10,mb=28, iw=W-ml-mr, ih=Hh-mt-mb;
+  let mx=Math.max(0.05,...D.map(d=>d.contrib)), mn=Math.min(0,...D.map(d=>d.contrib));
+  const step=niceStep(mx-mn); mx=Math.ceil(mx/step)*step; mn=Math.floor(mn/step)*step;
+  const y=v=>mt+ih*(mx-v)/(mx-mn), bw=iw/D.length, y0=y(0);
+  let g='';
+  for(let v=mn;v<=mx+1e-9;v+=step){ g+=`<line class="${Math.abs(v)<1e-9?'zero':'grid'}" x1="${ml}" x2="${W-mr}" y1="${y(v)}" y2="${y(v)}"/>`+
+     `<text class="tick" x="${ml-6}" y="${y(v)+4}" text-anchor="end">${v>0?'+':v<0?'−':''}${nf(Math.abs(v),step<0.1?2:1)}</text>`; }
+  D.forEach((d,i)=>{
+    const x=ml+i*bw+2, w=bw-4, top=d.contrib>=0?y(d.contrib):y0, h=Math.max(Math.abs(y(d.contrib)-y0),d.n===0?0:1), rad=Math.min(4,w/2,h);
+    const path=d.contrib>=0
+      ?`M${x},${top+h} V${top+rad} Q${x},${top} ${x+rad},${top} H${x+w-rad} Q${x+w},${top} ${x+w},${top+rad} V${top+h} Z`
+      :`M${x},${top} V${top+h-rad} Q${x},${top+h} ${x+rad},${top+h} H${x+w-rad} Q${x+w},${top+h} ${x+w},${top+h-rad} V${top} Z`;
+    g+=`<rect class="hit" data-i="${i}" x="${ml+i*bw}" y="${mt}" width="${bw}" height="${ih}"/>`+
+       `<path class="bar ${d.contrib>=0?'gain':'loss'}" d="${path}"/>`+
+       `<text class="tick" x="${ml+i*bw+bw/2}" y="${Hh-8}" text-anchor="middle">${d.lab}</text>`;
+  });
+  g+=`<text class="tick" x="${ml-6}" y="${mt-1}" text-anchor="end" style="font-size:10px"></text>`;
+  $('chart').innerHTML=`<svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Contribution to win rate by true count">${g}</svg><div class="tip" hidden id="tip"></div>`;
+  const tip=$('tip'), svg=$('chart').querySelector('svg');
+  svg.querySelectorAll('.hit').forEach(el=>{
+    const show=()=>{const d=D[+el.dataset.i], bb=svg.getBoundingClientRect(), sc=bb.width/W;
+      tip.innerHTML=`TC ${d.lab} · ${nf(100*d.share,1)}% of hands<br>edge ${sgn(d.edge,2)}% · avg bet ${nf(d.bet,1)} u<br>adds ${sgn(d.contrib,3)} u per 100`;
+      tip.style.left=((ml+(+el.dataset.i+0.5)*bw)*sc)+'px'; tip.style.top=(Math.min(y(Math.max(d.contrib,0)),y0)*sc)+'px'; tip.hidden=false;};
+    el.addEventListener('mouseenter',show); el.addEventListener('click',show);
+    el.addEventListener('mouseleave',()=>{tip.hidden=true;});
+  });
+  const posSum=D.filter(d=>d.contrib>0).reduce((a,d)=>a+d.contrib,0), tot=D.reduce((a,d)=>a+d.contrib,0);
+  const hi=D.filter(d=>d.b>=3).reduce((a,d)=>a+d.contrib,0);
+  $('c-note').innerHTML=`Bars show how much each true count adds to (or takes from) your win rate, in units per 100 hands. Hands at <b>+3 and above</b> produce <b>${tot>0?nf(100*hi/tot,0)+'%':'–'}</b> of the net result; the losing counts give back <b>${nf(posSum-tot,2)} u</b> per 100.`;
+  $('ctable').innerHTML='<table><thead><tr><th style="text-align:left">True count</th><th>Share of hands</th><th>Edge</th><th>Avg bet</th><th>u / 100</th></tr></thead><tbody>'+
+    D.map(d=>`<tr><td style="text-align:left">${d.lab}</td><td>${nf(100*d.share,1)}%</td><td>${d.n?sgn(d.edge,2)+'%':'–'}</td><td>${d.n?nf(d.bet,1):'–'}</td><td>${sgn(d.contrib,3)}</td></tr>`).join('')+'</tbody></table>';
+}
+function niceStep(range){const r=range/4,p=Math.pow(10,Math.floor(Math.log10(r))),m=r/p;return (m<1.5?1:m<3?2:m<7?5:10)*p;}
+
+/* ---------------- inputs ---------------- */
+function seg(id,key,parse){
+  const el=$(id);
+  el.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{st[key]=parse(b.dataset.v); onDecks(key); sync(); go();}));
+}
+function onDecks(key){
+  if(key!=='decks') return;
+  const [a,b,d]=PEN[st.decks]; st.pen=d; st.exita=EXITA[st.decks]; st.exitb={2:1,6:4,8:6}[st.decks];
+}
+function sync(){
+  for(const [id,key] of [['ver','ver'],['decks','decks'],['dev','dev']])
+    $(id).querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===String(st[key]))));
+  const [a,b]=PEN[st.decks]; st.pen=Math.min(b,Math.max(a,st.pen));
+  for(const id of ['pen','penr']){ $(id).min=a; $(id).max=b; $(id).value=st.pen; }
+  $('penhint').textContent=`≈ ${nf(st.decks*(1-st.pen/100),2)} decks cut off · range ${a}–${b}% for ${st.decks} decks`;
+  $('ins').checked=st.ins; $('insi').value=st.insi;
+  $('exit').checked=st.exit; $('exitv').value=st.exitv; $('exita').value=st.exita; $('exitbon').checked=!!st.exitbon; $('exitb').value=st.exitb;
+  $('wong').checked=st.wong; $('wongv').value=st.wongv;
+  for(const id of ['unit','bank','hph','trip']) $(id).value=st[id];
+  drawRamp();
+}
+function drawRamp(){
+  $('ramp').innerHTML=st.ramp.map((r,i)=>`<div class="rrow"><span>TC ≥</span><input type="number" step="0.5" id="rt${i}" value="${r[0]}" aria-label="Step ${i+1} true count"><span>bet</span><input type="number" step="1" min="1" id="ru${i}" value="${r[1]}" aria-label="Step ${i+1} units"><button type="button" class="x" data-i="${i}" aria-label="Remove step ${i+1}">×</button></div>`).join('');
+  st.ramp.forEach((r,i)=>{
+    $('rt'+i).addEventListener('input',e=>{const v=parseFloat(e.target.value); if(isFinite(v)){st.ramp[i][0]=v; go();}});
+    $('ru'+i).addEventListener('input',e=>{const v=parseFloat(e.target.value); if(isFinite(v)&&v>0){st.ramp[i][1]=v; go();}});
+  });
+  $('ramp').querySelectorAll('.x').forEach(b=>b.addEventListener('click',()=>{st.ramp.splice(+b.dataset.i,1); drawRamp(); go();}));
+}
+function num(id,key,{min=-Infinity,max=Infinity}={}){
+  $(id).addEventListener('input',e=>{const v=parseFloat(e.target.value); if(isFinite(v)){st[key]=Math.min(max,Math.max(min,v)); go(id);}});
+}
+let timer=null;
+function go(src){ save(); clearTimeout(timer); timer=setTimeout(()=>{ if(src==='pen'||src==='penr'){ $('pen').value=st.pen; $('penr').value=st.pen; $('penhint').textContent=`≈ ${nf(st.decks*(1-st.pen/100),2)} decks cut off · range ${PEN[st.decks][0]}–${PEN[st.decks][1]}% for ${st.decks} decks`;} render(); },40); }
+
+function init(){
+  seg('ver','ver',v=>v); seg('decks','decks',v=>+v); seg('dev','dev',v=>v);
+  $('presets').innerHTML=PRESETS.map((p,i)=>`<button type="button" class="chip" data-i="${i}">${p.name}</button>`).join('');
+  $('presets').querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{st.ramp=PRESETS[+b.dataset.i].r.map(r=>r.slice()); drawRamp(); go();}));
+  $('addrow').addEventListener('click',()=>{const L=st.ramp[st.ramp.length-1]||[0,1]; st.ramp.push([L[0]+1,L[1]+2]); drawRamp(); go();});
+  num('pen','pen',{}); num('penr','pen',{});
+  $('pen').addEventListener('change',()=>{sync(); go();});
+  $('ins').addEventListener('change',e=>{st.ins=e.target.checked; go();}); num('insi','insi');
+  $('exit').addEventListener('change',e=>{st.exit=e.target.checked; go();}); num('exitv','exitv'); num('exita','exita',{min:0});
+  $('exitbon').addEventListener('change',e=>{st.exitbon=e.target.checked; go();}); num('exitb','exitb',{min:0});
+  $('wong').addEventListener('change',e=>{st.wong=e.target.checked; go();}); num('wongv','wongv');
+  num('unit','unit',{min:1}); num('bank','bank',{min:0}); num('hph','hph',{min:1}); num('trip','trip',{min:0.5});
+  sync();
+}
+init();
+load().then(render).catch(err=>{ $('loading').textContent='Could not load the shoe data ('+err.message+'). Reload the page to try again.'; });
+</script>
+
+</body>
+</html>
