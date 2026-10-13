@@ -64,7 +64,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 .ramp{display:flex;flex-direction:column;gap:6px}
-.rrow{display:grid;grid-template-columns:auto 1fr auto 1fr auto;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.rrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto minmax(0,1fr) auto auto;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.rrow select{font-size:13px;padding:7px 6px}
 .rrow input{width:100%}
 .rrow .x{border:0;background:transparent;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;padding:4px 6px;border-radius:6px}
 .rrow .x:hover{background:var(--sunk);color:var(--ink)}
@@ -170,7 +171,7 @@ th{font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color
         <div class="base">Below the first step you bet <b>1 unit</b>.</div>
         <div class="ramp" id="ramp"></div>
         <button type="button" class="add" id="addrow">+ Add a step</button>
-        <div class="hint">Steps are in exact true count (running count ÷ decks left). Each step applies at that count and above.</div>
+        <div class="hint">Steps are in exact true count (running count ÷ decks left). Each step applies at that count and above. The bet is per spot, and ×2 means two spots: bet 10 ×2 puts 20 units out. Extra spots use up the good cards faster, and that is included.</div>
       </fieldset>
 
       <fieldset>
@@ -186,7 +187,7 @@ th{font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color
         <legend>Money</legend>
         <div class="f"><label for="unit">Base unit ($)</label><input type="number" id="unit" min="1" step="5"></div>
         <div class="f"><label for="bank">Bankroll ($)</label><input type="number" id="bank" min="0" step="1000"></div>
-        <div class="f"><label for="hph">Hands per hour</label><input type="number" id="hph" min="10" step="10"></div>
+        <div class="f"><label for="hph">Rounds per hour</label><input type="number" id="hph" min="10" step="10"></div>
         <div class="f"><label for="trip">Trip length (hours)</label><input type="number" id="trip" min="1" step="1"></div>
       </fieldset>
     </form>
@@ -196,7 +197,7 @@ th{font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color
       <div class="loading" id="loading">Loading shoe data…</div>
       <div id="out" hidden>
         <div class="head" style="margin-bottom:14px">
-          <div><div class="k">Win rate</div><div class="big" id="o-u">–</div><div class="sub" id="o-u2">units / 100 hands</div></div>
+          <div><div class="k">Win rate</div><div class="big" id="o-u">–</div><div class="sub" id="o-u2">units / 100 rounds</div></div>
           <div><div class="k">Hourly</div><div class="big" id="o-hr">–</div><div class="sub" id="o-hr2"></div></div>
           <div><div class="k">N₀</div><div class="big" id="o-n0">–</div><div class="sub" id="o-n02"></div></div>
           <div><div class="k">Risk of ruin</div><div class="big" id="o-ror">–</div><div class="sub" id="o-ror2"></div></div>
@@ -204,14 +205,14 @@ th{font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color
 
         <div class="cols">
           <div class="panel">
-            <h2>Per 100 hands</h2>
+            <h2>Per 100 rounds</h2>
             <dl>
               <dt>Win rate</dt><dd id="d-u"></dd>
               <dt>Standard deviation</dt><dd id="d-sd"></dd>
               <dt>Desirability index (DI)</dt><dd id="d-di"></dd>
-              <dt>Average bet</dt><dd id="d-avg"></dd>
-              <dt>Hands at your top bet</dt><dd id="d-top"></dd>
-              <dt id="d-hpsk">Hands played per shoe</dt><dd id="d-hps"></dd>
+              <dt>Average total bet per round</dt><dd id="d-avg"></dd>
+              <dt>Rounds at your top bet</dt><dd id="d-top"></dd>
+              <dt id="d-hpsk">Rounds played per shoe</dt><dd id="d-hps"></dd>
               <dt>Shoes you leave early</dt><dd id="d-left"></dd>
             </dl>
           </div>
@@ -249,7 +250,7 @@ th{font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color
           <details><summary>Table view</summary><div class="tbl" id="ctable"></div></details>
         </div>
 
-        <p class="note" style="margin-top:14px"><b>How this works.</b> Edge and variance at each true count come from 34–96 million simulated rounds per game version and deck count (basic strategy matches the Wizard of Odds chart). Those are replayed over 9,000–30,000 sampled shoes for this deck count, cut at your penetration, with your ramp and exit applied. Expect about ±3% sampling noise on u/100 and N₀. Risk of ruin assumes you never resize your unit. Not modelled: other players at the table, true-count rounding, and errors.</p>
+        <p class="note" style="margin-top:14px"><b>How this works.</b> Edge and variance at each true count come from 34–96 million simulated rounds per game version and deck count (basic strategy matches the Wizard of Odds chart). Those are replayed over 9,000–30,000 sampled shoes for this deck count, cut at your penetration, with your ramp and exit applied. Expect about ±3% sampling noise on u/100 and N₀. Risk of ruin assumes you never resize your unit. With two or more spots, each spot's hand is correlated with the others at 0.28 (measured in DDM, against about 0.5 in standard blackjack), and each extra spot uses about 2.7 more cards per round, so you get fewer rounds at high counts. Spot modelling was checked against a full multi-spot simulation. A round is one deal, whatever the number of spots; with one spot it is the same as a hand. Not modelled: other players at the table, true-count rounding, and errors.</p>
       </div>
     </section>
   </div>
@@ -273,9 +274,11 @@ const PRESETS=[
   {name:'1-3-5-8 from +2', r:[[2,3],[3,5],[4,8]]},
   {name:'1-2-4-8-12', r:[[1,2],[2,4],[3,8],[4,12]]},
   {name:'1-3-5-8-12 from +2', r:[[2,3],[3,5],[4,8],[5,12]]},
+  {name:'1-2-4-8, 2×10 at +5', r:[[2,2],[3,4],[4,8],[5,10,2]]},
+  {name:'1-3-5-8, 2×10 at +5', r:[[2,3],[3,5],[4,8],[5,10,2]]},
   {name:'Flat', r:[]}];
-const DEF={ver:'V1',decks:6,pen:83.3,dev:'top10',ins:false,insi:3,ramp:[[2,3],[3,5],[4,8],[5,12]],
-  exit:true,exitv:-3,exita:2,exitbon:false,exitb:4,wong:false,wongv:1,unit:25,bank:30000,hph:100,trip:10};
+const DEF={ver:'V1',decks:6,pen:83.3,dev:'top10',ins:false,insi:3,ramp:[[2,2],[3,4],[4,8],[5,10,2]],
+  exit:true,exitv:-3,exita:2,exitbon:true,exitb:4,wong:false,wongv:1,unit:25,bank:30000,hph:100,trip:10};
 let st=Object.assign({},DEF);
 try{const s=JSON.parse(localStorage.getItem('ddm-calc')||'null'); if(s&&typeof s==='object') st=Object.assign(st,s);}catch(e){}
 const save=()=>{try{localStorage.setItem('ddm-calc',JSON.stringify(st));}catch(e){}};
@@ -310,25 +313,31 @@ function Phi(x){ // standard normal CDF
 function compute(s){
   const P=PATH[s.decks], T=EDGE.t[s.decks+s.ver][s.dev], ev=T.ev, va=T.var, LO=EDGE.lo, ST=EDGE.step, NB=EDGE.n;
   const NC=52*s.decks, cut=Math.round(s.pen/100*NC), exA=s.exita*52, exB=s.exitbon?s.exitb*52:1e9;
-  const ramp=s.ramp.filter(r=>isFinite(r[0])&&isFinite(r[1])&&r[1]>0).slice().sort((a,b)=>a[0]-b[0]);
-  const top=ramp.length?ramp[ramp.length-1][1]:1;
+  const ramp=s.ramp.filter(r=>isFinite(r[0])&&isFinite(r[1])&&r[1]>0).map(r=>[r[0],r[1],r[2]||1]).sort((a,b)=>a[0]-b[0]);
+  const topR=ramp.length?ramp[ramp.length-1]:[0,1,1], top=topR[1]*topR[2];
+  const RHO=0.28;                                     // correlation between two spots' results (measured, DDM V1)
+  const xc=t=>Math.min(2.9,Math.max(2.4,2.70-0.018*t)); // extra cards used per added spot at true count t (measured)
   const bins={}; const binOf=t=>Math.max(-4,Math.min(9,Math.floor(t)));
-  let sumE=0,sumV=0,sumE2=0,nPlay=0,nDeal=0,shoes=0,left=0,sumBet=0,nTop=0;
+  let sumE=0,sumV=0,sumE2=0,nPlay=0,nDeal=0,shoes=0,left=0,sumBet=0,nTop=0,nHands=0;
   const {tc,pos,starts}=P;
   for(let k=0;k<starts.length-1;k++){
-    let sE=0,sV=0; shoes++;
-    for(let i=starts[k];i<starts[k+1];i++){
+    let sE=0,sV=0,debt=0; shoes++;
+    const end=starts[k+1];
+    for(let i=starts[k];i<end;i++){
+      // cards eaten by extra spots in earlier rounds: skip the path rounds those cards would have filled
+      while(debt>0&&i<end-1){ const dc=pos[i+1]-pos[i]; if(dc<=0||debt<dc/2) break; debt-=dc; i++; }
       if(pos[i]>=cut) break;
       const t=tc[i];
       if(s.exit && pos[i]>=exA && pos[i]<exB && t<=s.exitv){ left++; break; }
       nDeal++;
       if(s.wong && t<s.wongv) continue;
-      let u=1; for(const r of ramp){ if(t>=r[0]) u=r[1]; }
+      let u=1,ks=1; for(const r of ramp){ if(t>=r[0]){ u=r[1]; ks=r[2]; } }
       let j=Math.round((t-LO)/ST); j=j<0?0:j>=NB?NB-1:j;
-      let e=u*ev[j], v=u*u*va[j];
-      if(s.ins && t>=s.insi){ const pA=Math.max(0,(4+0.1*t)/52); e+=u*pA*0.5*0.0245*(t-2.93); v+=u*u*pA*0.5; }
-      sE+=e; sV+=v; nPlay++; sumBet+=u; if(u===top&&ramp.length) nTop++;
-      const b=binOf(t); const o=bins[b]||(bins[b]={n:0,e:0,u:0,edge:0}); o.n++; o.e+=e; o.u+=u; o.edge+=ev[j];
+      let e=ks*u*ev[j], v=u*u*va[j]*(ks+ks*(ks-1)*RHO);
+      if(s.ins && t>=s.insi){ const pA=Math.max(0,(4+0.1*t)/52); e+=ks*u*pA*0.5*0.0245*(t-2.93); v+=(ks*u)*(ks*u)*pA*0.5; }
+      if(ks>1) debt+=(ks-1)*xc(t);
+      sE+=e; sV+=v; nPlay++; nHands+=ks; sumBet+=ks*u; if(ks*u===top&&ramp.length) nTop++;
+      const b=binOf(t); const o=bins[b]||(bins[b]={n:0,e:0,u:0,edge:0}); o.n++; o.e+=e; o.u+=ks*u; o.edge+=ev[j];
     }
     sumE+=sE; sumV+=sV; sumE2+=sE*sE;
   }
@@ -337,7 +346,7 @@ function compute(s){
   const varShoe=sumV/shoes + (sumE2/shoes-(sumE/shoes)**2);
   const vh=varShoe/(denomN/shoes);
   return {mu,vh,nPlay,nDeal,shoes,left,avgBet:sumBet/nPlay,topShare:ramp.length?nTop/nPlay:0,
-          hps:nPlay/shoes,hpsDeal:nDeal/shoes,bins,denomN,top};
+          hps:nPlay/shoes,hpsDeal:nDeal/shoes,bins,denomN,top,nHands};
 }
 function tripBank(mu,vh,n,p){ // bankroll B with P(max drawdown from start >= B within n hands) = 1-p
   const m=mu*n, sd=Math.sqrt(vh*n);
@@ -362,10 +371,10 @@ function render(){
   const mu=r.mu, vh=r.vh, pos=mu>0;
   const N0=pos?vh/mu/mu:Infinity, K=pos?vh/mu:Infinity, Bu=st.bank/U;
   const ror=pos?Math.exp(-2*Bu/K):1;
-  const per=st.wong?'per 100 hands dealt':'per 100 hands played';
+  const per=st.wong?'per 100 rounds dealt':'per 100 rounds played';
   set('o-u',sgn(100*mu,2)); set('o-u2','units '+per);
   set('o-hr',usd(mu*H*U)); set('o-hr2','SD '+usd(Math.sqrt(vh*H)*U)+' / hour');
-  set('o-n0',pos?nf(N0):'–'); set('o-n02',pos?nf(N0/H,0)+' hours at '+H+'/hr':'not reached: this setup loses');
+  set('o-n0',pos?nf(N0):'–'); set('o-n02',pos?'rounds · '+nf(N0/H,0)+' h at '+H+'/hr':'not reached: this setup loses');
   set('o-ror',pos?pct(ror):'100%'); set('o-ror2',pos?'on '+usd(st.bank)+' at '+usd(U)+' units':'negative expectation');
   set('k-u',sgn(100*mu,2)); set('k-hr',usd(mu*H*U)); set('k-n0',pos?nf(N0):'–'); set('k-ror',pos?pct(ror):'100%');
 
@@ -374,7 +383,7 @@ function render(){
   set('d-di',pos?nf(1000/Math.sqrt(N0),1):'–');
   set('d-avg',nf(r.avgBet,2)+' u');
   set('d-top',r.topShare?nf(100*r.topShare,1)+'%':'–');
-  set('d-hpsk',st.wong?'Hands bet / dealt per shoe':'Hands played per shoe');
+  set('d-hpsk',st.wong?'Rounds bet / dealt per shoe':'Rounds played per shoe');
   set('d-hps',st.wong?nf(r.hps,1)+' / '+nf(r.hpsDeal,1):nf(r.hps,1));
   set('d-left',st.exit?nf(100*r.left/r.shoes,0)+'%':'–');
 
@@ -386,7 +395,7 @@ function render(){
   set('b-n0h',pos?nf(N0/H,0)+' h':'–');
 
   const n=H*st.trip, tm=mu*n, tsd=Math.sqrt(vh*n);
-  set('t-h','Trip · '+st.trip+' hours · '+nf(n)+' hands');
+  set('t-h','Trip · '+st.trip+' hours · '+nf(n)+' rounds');
   set('t-ev',sgn(tm,0)+' u · '+usd(tm*U));
   set('t-sd',nf(tsd,0)+' u · '+usd(tsd*U));
   set('t-down',pct(Phi(-tm/tsd)));
@@ -424,15 +433,15 @@ function chart(r){
   const tip=$('tip'), svg=$('chart').querySelector('svg');
   svg.querySelectorAll('.hit').forEach(el=>{
     const show=()=>{const d=D[+el.dataset.i], bb=svg.getBoundingClientRect(), sc=bb.width/W;
-      tip.innerHTML=`TC ${d.lab} · ${nf(100*d.share,1)}% of hands<br>edge ${sgn(d.edge,2)}% · avg bet ${nf(d.bet,1)} u<br>adds ${sgn(d.contrib,3)} u per 100`;
+      tip.innerHTML=`TC ${d.lab} · ${nf(100*d.share,1)}% of rounds<br>edge ${sgn(d.edge,2)}% per hand · avg bet ${nf(d.bet,1)} u<br>adds ${sgn(d.contrib,3)} u per 100`;
       tip.style.left=((ml+(+el.dataset.i+0.5)*bw)*sc)+'px'; tip.style.top=(Math.min(y(Math.max(d.contrib,0)),y0)*sc)+'px'; tip.hidden=false;};
     el.addEventListener('mouseenter',show); el.addEventListener('click',show);
     el.addEventListener('mouseleave',()=>{tip.hidden=true;});
   });
   const posSum=D.filter(d=>d.contrib>0).reduce((a,d)=>a+d.contrib,0), tot=D.reduce((a,d)=>a+d.contrib,0);
   const hi=D.filter(d=>d.b>=3).reduce((a,d)=>a+d.contrib,0);
-  $('c-note').innerHTML=`Bars show how much each true count adds to (or takes from) your win rate, in units per 100 hands. Hands at <b>+3 and above</b> produce <b>${tot>0?nf(100*hi/tot,0)+'%':'–'}</b> of the net result; the losing counts give back <b>${nf(posSum-tot,2)} u</b> per 100.`;
-  $('ctable').innerHTML='<table><thead><tr><th style="text-align:left">True count</th><th>Share of hands</th><th>Edge</th><th>Avg bet</th><th>u / 100</th></tr></thead><tbody>'+
+  $('c-note').innerHTML=`Bars show how much each true count adds to (or takes from) your win rate, in units per 100 rounds. Hands at <b>+3 and above</b> produce <b>${tot>0?nf(100*hi/tot,0)+'%':'–'}</b> of the net result; the losing counts give back <b>${nf(posSum-tot,2)} u</b> per 100.`;
+  $('ctable').innerHTML='<table><thead><tr><th style="text-align:left">True count</th><th>Share of rounds</th><th>Edge per hand</th><th>Avg bet / round</th><th>u / 100</th></tr></thead><tbody>'+
     D.map(d=>`<tr><td style="text-align:left">${d.lab}</td><td>${nf(100*d.share,1)}%</td><td>${d.n?sgn(d.edge,2)+'%':'–'}</td><td>${d.n?nf(d.bet,1):'–'}</td><td>${sgn(d.contrib,3)}</td></tr>`).join('')+'</tbody></table>';
 }
 function niceStep(range){const r=range/4,p=Math.pow(10,Math.floor(Math.log10(r))),m=r/p;return (m<1.5?1:m<3?2:m<7?5:10)*p;}
@@ -459,8 +468,9 @@ function sync(){
   drawRamp();
 }
 function drawRamp(){
-  $('ramp').innerHTML=st.ramp.map((r,i)=>`<div class="rrow"><span>TC ≥</span><input type="number" step="0.5" id="rt${i}" value="${r[0]}" aria-label="Step ${i+1} true count"><span>bet</span><input type="number" step="1" min="1" id="ru${i}" value="${r[1]}" aria-label="Step ${i+1} units"><button type="button" class="x" data-i="${i}" aria-label="Remove step ${i+1}">×</button></div>`).join('');
+  $('ramp').innerHTML=st.ramp.map((r,i)=>`<div class="rrow"><span>TC ≥</span><input type="number" step="0.5" id="rt${i}" value="${r[0]}" aria-label="Step ${i+1} true count"><span>bet</span><input type="number" step="1" min="1" id="ru${i}" value="${r[1]}" aria-label="Step ${i+1} units per spot"><select id="rs${i}" aria-label="Step ${i+1} spots">${[1,2,3].map(k=>`<option value="${k}"${(r[2]||1)===k?' selected':''}>×${k}</option>`).join('')}</select><button type="button" class="x" data-i="${i}" aria-label="Remove step ${i+1}">×</button></div>`).join('');
   st.ramp.forEach((r,i)=>{
+    $('rs'+i).addEventListener('change',e=>{st.ramp[i][2]=+e.target.value; go();});
     $('rt'+i).addEventListener('input',e=>{const v=parseFloat(e.target.value); if(isFinite(v)){st.ramp[i][0]=v; go();}});
     $('ru'+i).addEventListener('input',e=>{const v=parseFloat(e.target.value); if(isFinite(v)&&v>0){st.ramp[i][1]=v; go();}});
   });
@@ -476,7 +486,7 @@ function init(){
   seg('ver','ver',v=>v); seg('decks','decks',v=>+v); seg('dev','dev',v=>v);
   $('presets').innerHTML=PRESETS.map((p,i)=>`<button type="button" class="chip" data-i="${i}">${p.name}</button>`).join('');
   $('presets').querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{st.ramp=PRESETS[+b.dataset.i].r.map(r=>r.slice()); drawRamp(); go();}));
-  $('addrow').addEventListener('click',()=>{const L=st.ramp[st.ramp.length-1]||[0,1]; st.ramp.push([L[0]+1,L[1]+2]); drawRamp(); go();});
+  $('addrow').addEventListener('click',()=>{const L=st.ramp[st.ramp.length-1]||[0,1,1]; st.ramp.push([L[0]+1,L[1]+2,L[2]||1]); drawRamp(); go();});
   num('pen','pen',{}); num('penr','pen',{});
   $('pen').addEventListener('change',()=>{sync(); go();});
   $('ins').addEventListener('change',e=>{st.ins=e.target.checked; go();}); num('insi','insi');
