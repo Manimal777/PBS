@@ -92,6 +92,7 @@ dt{color:var(--muted)}
 dd{margin:0;font:500 14px var(--mono);font-variant-numeric:tabular-nums;text-align:right}
 .status{display:inline-flex;align-items:center;gap:6px;font:600 12px var(--body);padding:3px 9px;border-radius:999px;border:1px solid var(--line)}
 .status.bad{color:var(--warn);border-color:var(--warn)}
+.hint.warn{color:var(--warn);font-weight:600}
 .note{font-size:12.5px;color:var(--muted);margin:10px 0 0;line-height:1.45}
 .note b{color:var(--ink);font-weight:600}
 
@@ -163,6 +164,7 @@ th{font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color
           <button type="button" data-v="top20">+ top 20</button>
         </div>
         <label class="check"><input type="checkbox" id="ins"> Take insurance at TC ≥ <input type="number" class="sm" id="insi" step="0.5"></label>
+        <div class="hint warn" id="devwarn" hidden>The top-20 tables are missing from the data file this page loaded, so it is showing top-10 results. Upload the new ddm-data.json next to this page and reload.</div>
         <div class="hint">Top 10 and top 20 are the trainer's deviation sets (whole-number indices, any-card totals). Insurance index measured at +2.9 for six decks.</div>
       </fieldset>
 
@@ -293,7 +295,7 @@ async function gunzip(b64){
   return new Uint8Array(buf);
 }
 async function load(){
-  const res=await fetch('ddm-data.json'); const J=await res.json();
+  const res=await fetch('ddm-data.json?v=4',{cache:'no-cache'}); const J=await res.json();   // version tag: a new data file is never mixed with a cached old one
   EDGE=J.edges;
   for(const nd of ['2','6','8']){
     const p=J.paths[nd], raw=await gunzip(p.b64), n=p.n;
@@ -312,7 +314,8 @@ function Phi(x){ // standard normal CDF
   return x>=0?1-y:y;
 }
 function compute(s){
-  const P=PATH[s.decks], T=EDGE.t[s.decks+s.ver][s.dev], ev=T.ev, va=T.var, LO=EDGE.lo, ST=EDGE.step, NB=EDGE.n;
+  const G=EDGE.t[s.decks+s.ver], T=G[s.dev]||G.top10, ev=T.ev, va=T.var, LO=EDGE.lo, ST=EDGE.step, NB=EDGE.n;
+  const P=PATH[s.decks];
   const NC=52*s.decks, cut=Math.round(s.pen/100*NC), exA=s.exita*52, exB=s.exitbon?s.exitb*52:1e9;
   const ramp=s.ramp.filter(r=>isFinite(r[0])&&isFinite(r[1])&&r[1]>0).map(r=>[r[0],r[1],r[2]||1]).sort((a,b)=>a[0]-b[0]);
   const topR=ramp.length?ramp[ramp.length-1]:[0,1,1], top=topR[1]*topR[2];
@@ -368,6 +371,7 @@ const set=(id,v)=>{$(id).textContent=v;};
 /* ---------------- render results ---------------- */
 function render(){
   if(!EDGE) return;
+  $('devwarn').hidden=!!EDGE.t[st.decks+st.ver][st.dev];
   const r=compute(st), U=st.unit, H=st.hph;
   const mu=r.mu, vh=r.vh, pos=mu>0;
   const N0=pos?vh/mu/mu:Infinity, K=pos?vh/mu:Infinity, Bu=st.bank/U;
