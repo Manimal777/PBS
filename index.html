@@ -159,10 +159,11 @@ th{font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color
         <legend>Strategy</legend>
         <div class="seg" role="group" aria-label="Strategy" id="dev">
           <button type="button" data-v="basic">Basic strategy</button>
-          <button type="button" data-v="top10">+ top 10 deviations</button>
+          <button type="button" data-v="top10">+ top 10</button>
+          <button type="button" data-v="top20">+ top 20</button>
         </div>
         <label class="check"><input type="checkbox" id="ins"> Take insurance at TC ≥ <input type="number" class="sm" id="insi" step="0.5"></label>
-        <div class="hint">Insurance index measured at +2.9 for six decks.</div>
+        <div class="hint">Top 10 and top 20 are the trainer's deviation sets (whole-number indices, any-card totals). Insurance index measured at +2.9 for six decks.</div>
       </fieldset>
 
       <fieldset>
@@ -250,7 +251,7 @@ th{font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color
           <details><summary>Table view</summary><div class="tbl" id="ctable"></div></details>
         </div>
 
-        <p class="note" style="margin-top:14px"><b>How this works.</b> Edge and variance at each true count come from 34–96 million simulated rounds per game version and deck count (basic strategy matches the Wizard of Odds chart). Those are replayed over 9,000–30,000 sampled shoes for this deck count, cut at your penetration, with your ramp and exit applied. Expect about ±3% sampling noise on u/100 and N₀. Risk of ruin assumes you never resize your unit. With two or more spots, each spot's hand is correlated with the others at 0.28 (measured in DDM, against about 0.5 in standard blackjack), and each extra spot uses about 2.7 more cards per round, so you get fewer rounds at high counts. Spot modelling was checked against a full multi-spot simulation. A round is one deal, whatever the number of spots; with one spot it is the same as a hand. Not modelled: other players at the table, true-count rounding, and errors.</p>
+        <p class="note" style="margin-top:14px"><b>How this works.</b> Edge and variance at each true count come from 34–96 million simulated rounds per game version and deck count (basic strategy matches the Wizard of Odds chart). The six-deck V1 deviation tables were re-run with the trainer's current top 10 and top 20 sets (95 million rounds each); for other deck counts and V2, top 20 adds the six-deck gain from the extra ten plays to that game's top-10 table. Those are replayed over 9,000–30,000 sampled shoes for this deck count, cut at your penetration, with your ramp and exit applied. Expect about ±3% sampling noise on u/100 and N₀. Risk of ruin assumes you never resize your unit. With two or more spots, each spot's hand is correlated with the others at 0.28 (measured in DDM, against about 0.5 in standard blackjack), and each extra spot uses about 2.7 more cards per round, so you get fewer rounds at high counts. Spot modelling was checked against a full multi-spot simulation. A round is one deal, whatever the number of spots; with one spot it is the same as a hand. Not modelled: other players at the table, true-count rounding, and errors.</p>
       </div>
     </section>
   </div>
