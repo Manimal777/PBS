@@ -93,6 +93,10 @@ dd{margin:0;font:500 14px var(--mono);font-variant-numeric:tabular-nums;text-ali
 .status{display:inline-flex;align-items:center;gap:6px;font:600 12px var(--body);padding:3px 9px;border-radius:999px;border:1px solid var(--line)}
 .status.bad{color:var(--warn);border-color:var(--warn)}
 .hint.warn{color:var(--warn);font-weight:600}
+.prun{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin-bottom:12px}
+.pbtn{border:0;background:var(--accent);color:var(--accent-ink);font:600 14px var(--body);padding:9px 14px;border-radius:8px;cursor:pointer}
+.pbtn:disabled{opacity:.6;cursor:progress}
+.pbadge{font:600 11px/1 var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:4px 8px}
 .note{font-size:12.5px;color:var(--muted);margin:10px 0 0;line-height:1.45}
 .note b{color:var(--ink);font-weight:600}
 
@@ -199,6 +203,8 @@ th{font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color
     <section class="read" id="read" aria-live="polite">
       <div class="loading" id="loading">Loading shoe data…</div>
       <div id="out" hidden>
+        <div class="prun"><button type="button" class="pbtn" id="precise">Run precise simulation</button>
+          <span class="pbadge" id="pbadge" hidden>Precise</span><span class="hint" id="pstat"></span></div>
         <div class="head" style="margin-bottom:14px">
           <div><div class="k">Win rate</div><div class="big" id="o-u">–</div><div class="sub" id="o-u2">units / 100 rounds</div></div>
           <div><div class="k">Hourly</div><div class="big" id="o-hr">–</div><div class="sub" id="o-hr2"></div></div>
@@ -253,7 +259,7 @@ th{font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color
           <details><summary>Table view</summary><div class="tbl" id="ctable"></div></details>
         </div>
 
-        <p class="note" style="margin-top:14px"><b>How this works.</b> Edge and variance at each true count come from 34–96 million simulated rounds per game version and deck count (basic strategy matches the Wizard of Odds chart). The six-deck V1 deviation tables were re-run with the trainer's current top 10 and top 20 sets (95 million rounds each); for other deck counts and V2, top 20 adds the six-deck gain from the extra ten plays to that game's top-10 table. Those are replayed over 9,000–30,000 sampled shoes for this deck count, cut at your penetration, with your ramp and exit applied. Expect about ±3% sampling noise on u/100 and N₀. Risk of ruin assumes you never resize your unit. With two or more spots, each spot's hand is correlated with the others at 0.28 (measured in DDM, against about 0.5 in standard blackjack), and each extra spot uses about 2.7 more cards per round, so you get fewer rounds at high counts. Spot modelling was checked against a full multi-spot simulation. A round is one deal, whatever the number of spots; with one spot it is the same as a hand. Not modelled: other players at the table, true-count rounding, and errors.</p>
+        <p class="note" style="margin-top:14px"><b>How this works.</b> Edge and variance at each true count, separately for each deck dealt (the edge at a given count rises the deeper you are), come from 34–96 million simulated rounds per game version and deck count (basic strategy matches the Wizard of Odds chart). The six-deck V1 tables were re-run with the trainer's current top 10 and top 20 sets (380 million rounds each, smoothed across neighbouring counts with a local straight-line fit); for other deck counts and V2, top 20 adds the six-deck gain from the extra ten plays to that game's top-10 table. Those are replayed over 9,000–30,000 sampled shoes for this deck count, cut at your penetration, with your ramp and exit applied. The ± after the win rate is one standard error, combining which shoes were sampled and the finite size of the edge tables. The quick estimate replays stored shoes; <b>Run precise simulation</b> generates fresh shoes for about five seconds, dealing every round with basic strategy so the cards each round uses follow the cards themselves and narrows the ± to roughly the edge-table limit. Risk of ruin assumes you never resize your unit. With two or more spots, each spot's hand is correlated with the others at 0.28 (measured in DDM, against about 0.5 in standard blackjack), and each extra spot uses about 2.7 more cards per round, so you get fewer rounds at high counts. Spot modelling was checked against a full multi-spot simulation. A round is one deal, whatever the number of spots; with one spot it is the same as a hand. Not modelled: other players at the table, true-count rounding, and errors.</p>
       </div>
     </section>
   </div>
@@ -287,7 +293,7 @@ try{const s=JSON.parse(localStorage.getItem('ddm-calc')||'null'); if(s&&typeof s
 const save=()=>{try{localStorage.setItem('ddm-calc',JSON.stringify(st));}catch(e){}};
 
 /* ---------------- data ---------------- */
-let EDGE=null; const PATH={};
+let EDGE=null, STRAT=null; const PATH={};
 async function gunzip(b64){
   const bin=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
   const ds=new DecompressionStream('gzip');
@@ -295,8 +301,8 @@ async function gunzip(b64){
   return new Uint8Array(buf);
 }
 async function load(){
-  const res=await fetch('ddm-data.json?v=4',{cache:'no-cache'}); const J=await res.json();   // version tag: a new data file is never mixed with a cached old one
-  EDGE=J.edges;
+  const res=await fetch('ddm-data.json?v=5',{cache:'no-cache'}); const J=await res.json();   // version tag: a new data file is never mixed with a cached old one
+  EDGE=J.edges; STRAT=J.strategy;
   for(const nd of ['2','6','8']){
     const p=J.paths[nd], raw=await gunzip(p.b64), n=p.n;
     const q=new Int16Array(raw.buffer.slice(0,2*n)), d=raw.subarray(2*n,3*n);   // TC ×100, then cards per round
@@ -313,44 +319,132 @@ function Phi(x){ // standard normal CDF
   const t=1/(1+0.2316419*Math.abs(x)), y=0.3989422804014327*Math.exp(-x*x/2)*t*(0.31938153+t*(-0.356563782+t*(1.781477937+t*(-1.821255978+t*1.330274429))));
   return x>=0?1-y:y;
 }
-function compute(s){
-  const G=EDGE.t[s.decks+s.ver], T=G[s.dev]||G.top10, ev=T.ev, va=T.var, LO=EDGE.lo, ST=EDGE.step, NB=EDGE.n;
-  const P=PATH[s.decks];
+/* The core loop. Self-contained (no outside variables) so the same code also runs inside the precise-run worker. */
+function accumulate(P,s,X,A){
+  const ev=X.ev, va=X.va, LO=X.LO, ST=X.ST, NB=X.NB;
   const NC=52*s.decks, cut=Math.round(s.pen/100*NC), exA=s.exita*52, exB=s.exitbon?s.exitb*52:1e9;
   const ramp=s.ramp.filter(r=>isFinite(r[0])&&isFinite(r[1])&&r[1]>0).map(r=>[r[0],r[1],r[2]||1]).sort((a,b)=>a[0]-b[0]);
   const topR=ramp.length?ramp[ramp.length-1]:[0,1,1], top=topR[1]*topR[2];
   const RHO=0.28;                                     // correlation between two spots' results (measured, DDM V1)
   const xc=t=>Math.min(2.9,Math.max(2.4,2.70-0.018*t)); // extra cards used per added spot at true count t (measured)
-  const bins={}; const binOf=t=>Math.max(-4,Math.min(9,Math.floor(t)));
-  let sumE=0,sumV=0,sumE2=0,nPlay=0,nDeal=0,shoes=0,left=0,sumBet=0,nTop=0,nHands=0;
+  const binOf=t=>Math.max(-4,Math.min(9,Math.floor(t)));
   const {tc,pos,starts}=P;
   for(let k=0;k<starts.length-1;k++){
-    let sE=0,sV=0,debt=0; shoes++;
+    let sE=0,sV=0,debt=0,dN=0; A.shoes++;
     const end=starts[k+1];
     for(let i=starts[k];i<end;i++){
       // cards eaten by extra spots in earlier rounds: skip the path rounds those cards would have filled
       while(debt>0&&i<end-1){ const dc=pos[i+1]-pos[i]; if(dc<=0||debt<dc/2) break; debt-=dc; i++; }
       if(pos[i]>=cut) break;
       const t=tc[i];
-      if(s.exit && pos[i]>=exA && pos[i]<exB && t<=s.exitv){ left++; break; }
-      nDeal++;
+      if(s.exit && pos[i]>=exA && pos[i]<exB && t<=s.exitv){ A.left++; break; }
+      A.nDeal++; if(s.wong) dN++;
       if(s.wong && t<s.wongv) continue;
       let u=1,ks=1; for(const r of ramp){ if(t>=r[0]){ u=r[1]; ks=r[2]; } }
       let j=Math.round((t-LO)/ST); j=j<0?0:j>=NB?NB-1:j;
-      let e=ks*u*ev[j], v=u*u*va[j]*(ks+ks*(ks-1)*RHO);
+      const dp=Math.min(ev.length-1,Math.floor(pos[i]/52));  // edge at a given count rises the deeper you are: one table per deck dealt
+      const evj=ev[dp][j];
+      let e=ks*u*evj, v=u*u*va[dp][j]*(ks+ks*(ks-1)*RHO);
       if(s.ins && t>=s.insi){ const pA=Math.max(0,(4+0.1*t)/52); e+=ks*u*pA*0.5*0.0245*(t-2.93); v+=(ks*u)*(ks*u)*pA*0.5; }
       if(ks>1) debt+=(ks-1)*xc(t);
-      sE+=e; sV+=v; nPlay++; nHands+=ks; sumBet+=ks*u; if(ks*u===top&&ramp.length) nTop++;
-      const b=binOf(t); const o=bins[b]||(bins[b]={n:0,e:0,u:0,edge:0}); o.n++; o.e+=e; o.u+=ks*u; o.edge+=ev[j];
+      sE+=e; sV+=v; A.nPlay++; if(!s.wong) dN++; A.nHands+=ks; A.sumBet+=ks*u; if(ks*u===top&&ramp.length) A.nTop++;
+      A.W[dp*NB+j]+=ks*u;
+      const b=binOf(t)+4; A.bn[b]++; A.be[b]+=e; A.bu[b]+=ks*u; A.bedge[b]+=evj;
     }
-    sumE+=sE; sumV+=sV; sumE2+=sE*sE;
+    A.sumE+=sE; A.sumV+=sV; A.sumE2+=sE*sE; A.sumD+=dN; A.sumD2+=dN*dN; A.sumED+=sE*dN;
   }
-  const denomN=s.wong?nDeal:nPlay;
-  const mu=sumE/denomN;
-  const varShoe=sumV/shoes + (sumE2/shoes-(sumE/shoes)**2);
-  const vh=varShoe/(denomN/shoes);
-  return {mu,vh,nPlay,nDeal,shoes,left,avgBet:sumBet/nPlay,topShare:ramp.length?nTop/nPlay:0,
-          hps:nPlay/shoes,hpsDeal:nDeal/shoes,bins,denomN,top,nHands};
+  A.top=top; A.hasRamp=ramp.length>0;
+  return A;
+}
+function newAcc(NB){ return {sumE:0,sumV:0,sumE2:0,sumD:0,sumD2:0,sumED:0,nPlay:0,nDeal:0,shoes:0,left:0,sumBet:0,nTop:0,nHands:0,top:1,hasRamp:false,
+  W:new Float64Array(12*NB),bn:new Float64Array(14),be:new Float64Array(14),bu:new Float64Array(14),bedge:new Float64Array(14)}; }
+function ctxFor(s){
+  const G=EDGE.t[s.decks+s.ver], T=G[s.dev]||G.top10, k=s.decks+s.ver;
+  const by3=a=>Array.isArray(a[0])?a:[a];                 // older data files have one table for the whole shoe
+  const c=EDGE.cnt&&EDGE.cnt[k]; return {ev:by3(T.ev),va:by3(T.var),LO:EDGE.lo,ST:EDGE.step,NB:EDGE.n,cnt:c?by3(c):null};
+}
+function finish(A,s,X){
+  const denomN=s.wong?A.nDeal:A.nPlay, S=A.shoes;
+  const mu=A.sumE/denomN;
+  const varShoe=A.sumV/S + (A.sumE2/S-(A.sumE/S)**2);
+  const vh=varShoe/(denomN/S);
+  // error of mu: (1) which shoes were sampled (ratio estimator over shoes); (2) the edge table itself (rounds behind each true-count bin)
+  const dbar=A.sumD/S, ss=Math.max(0,A.sumE2-2*mu*A.sumED+mu*mu*A.sumD2);
+  const sePath=Math.sqrt(ss/(S*(S-1)))/dbar;
+  let vt=0; if(X.cnt){ for(let d=0;d<X.ev.length;d++) for(let j=0;j<X.NB;j++){ const w=A.W[d*X.NB+j]; if(w>0){ const n=Math.max(X.cnt[d][j],20000); vt+=w*w*X.va[d][j]/n; } } }
+  const seTable=Math.sqrt(vt)/denomN;
+  const bins={}; for(let b=0;b<14;b++) if(A.bn[b]) bins[b-4]={n:A.bn[b],e:A.be[b],u:A.bu[b],edge:A.bedge[b]};
+  return {mu,vh,se:Math.sqrt(sePath*sePath+seTable*seTable),sePath,seTable,nPlay:A.nPlay,nDeal:A.nDeal,shoes:S,left:A.left,
+          avgBet:A.sumBet/A.nPlay,topShare:A.hasRamp?A.nTop/A.nPlay:0,hps:A.nPlay/S,hpsDeal:A.nDeal/S,bins,denomN,top:A.top,nHands:A.nHands};
+}
+function compute(s){ const X=ctxFor(s); return finish(accumulate(PATH[s.decks],s,X,newAcc(X.NB)),s,X); }
+
+/* ---- precise run: fresh shoes generated in a background worker for a fixed time ---- */
+function genPaths(nShoes,decks,maxPos,STR,rng){
+  // Shuffle real shoes and deal each round for real (peek, basic-strategy hits and doubles, dealer hits soft 17),
+  // so the number of cards a round uses follows the cards themselves, as at the table.
+  const NC=52*decks, rk=new Int8Array(NC), TAG=[0,-1,1,1,1,1,1,0,0,0,-1];
+  let k=0; for(let d=0;d<decks;d++) for(let r=1;r<=13;r++) for(let q=0;q<4;q++) rk[k++]=r>10?10:r;
+  const cap=nShoes*Math.ceil(maxPos/3+2), tc=new Float32Array(cap), pos=new Uint16Array(cap), starts=new Int32Array(nShoes+1);
+  const ONE=STR.one, HARD=STR.hard, SOFT=STR.soft;
+  let m=0;
+  for(let sh=0;sh<nShoes;sh++){
+    for(let i=NC-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); const x=rk[i]; rk[i]=rk[j]; rk[j]=x; }
+    starts[sh]=m; let p=0, rc=0;
+    while(p<maxPos&&p<NC-25){
+      tc[m]=rc/((NC-p)/52); pos[m]=p; m++;
+      const p0=p, c1=rk[p++], up=rk[p++], hole=rk[p++];
+      if(!((up===1&&hole===10)||(up===10&&hole===1))){
+        let s=c1, ace=c1===1, n=1, live=true;
+        while(true){
+          let a;
+          if(n===1){ a=ONE[c1-1][up-1]; if(a==='S') a='H'; }
+          else{ const soft=ace&&s+10<=21, tt=soft?s+10:s; if(tt>=21) break; a=soft?SOFT[tt-12][up-1]:HARD[s-2][up-1]; }
+          if(a==='S') break;
+          const c=rk[p++];
+          if(n===1&&((s===1&&c===10)||(s===10&&c===1))){ live=false; break; }   // blackjack paid at once
+          s+=c; ace=ace||c===1; n++;
+          if(s>21){ live=false; break; }
+          if(c1===1&&n===2) break;                                              // a lone ace gets one card
+        }
+        if(live){ let ds=up+hole, dace=up===1||hole===1;
+          while(true){ const soft=dace&&ds+10<=21, dt=soft?ds+10:ds; if(ds>21||dt>=18||(dt===17&&!soft)) break; const c=rk[p++]; ds+=c; dace=dace||c===1; } }
+      }
+      for(let q=p0;q<p;q++) rc+=TAG[rk[q]];
+    }
+  }
+  starts[nShoes]=m;
+  return {tc:tc.subarray(0,m),pos:pos.subarray(0,m),starts};
+}
+function workerMain(){
+  onmessage=e=>{
+    const {s,X,STR,ms,seed}=e.data; let st=seed>>>0||1;
+    const rng=()=>{ st^=st<<13; st^=st>>>17; st^=st<<5; return (st>>>0)/4294967296; };
+    const NC=52*s.decks, maxPos=Math.min(NC-1,Math.round(s.pen/100*NC)+30);
+    const A=newAcc(X.NB), t0=Date.now(); let last=t0;
+    while(Date.now()-t0<ms){
+      accumulate(genPaths(4000,s.decks,maxPos,STR,rng),s,X,A);
+      if(Date.now()-last>250){ last=Date.now(); postMessage({prog:true,shoes:A.shoes,rounds:A.nDeal,frac:(last-t0)/ms}); }
+    }
+    postMessage({done:true,A});
+  };
+}
+let WORKER=null, PRECISE=null;
+function runPrecise(){
+  if(WORKER){ WORKER.terminate(); WORKER=null; }
+  const s=JSON.parse(JSON.stringify(st)), X=ctxFor(s);
+  const src=[accumulate,newAcc,genPaths].map(f=>f.toString()).join('\n')+'\n('+workerMain.toString()+')();';
+  WORKER=new Worker(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));
+  const btn=$('precise'); btn.disabled=true; set('pstat','Simulating… 0%');
+  WORKER.onmessage=e=>{
+    const d=e.data;
+    if(d.prog){ set('pstat',`Simulating… ${Math.min(99,Math.round(100*d.frac))}% · ${nf(d.shoes)} shoes · ${nf(d.rounds/1e6,1)}M rounds`); return; }
+    WORKER.terminate(); WORKER=null; btn.disabled=false;
+    PRECISE={key:JSON.stringify(s),r:finish(d.A,s,X)};
+    render();
+  };
+  WORKER.onerror=err=>{ btn.disabled=false; set('pstat','The precise run failed in this browser ('+err.message+').'); WORKER=null; };
+  WORKER.postMessage({s,X,STR:STRAT,ms:5000,seed:(Date.now()^0x9e3779b9)>>>0});
 }
 function tripBank(mu,vh,n,p){ // bankroll B with P(max drawdown from start >= B within n hands) = 1-p
   const m=mu*n, sd=Math.sqrt(vh*n);
@@ -372,18 +466,23 @@ const set=(id,v)=>{$(id).textContent=v;};
 function render(){
   if(!EDGE) return;
   $('devwarn').hidden=!!EDGE.t[st.decks+st.ver][st.dev];
-  const r=compute(st), U=st.unit, H=st.hph;
+  const key=JSON.stringify(st), usePrecise=PRECISE&&PRECISE.key===key;
+  if(!usePrecise&&WORKER){ WORKER.terminate(); WORKER=null; $('precise').disabled=false; }
+  const r=usePrecise?PRECISE.r:compute(st), U=st.unit, H=st.hph;
+  set('pstat',usePrecise?`Precise run: ${nf(r.shoes)} fresh shoes · ${nf(r.nDeal/1e6,1)}M rounds · ±${nf(100*r.se,2)} u/100`
+    :`Quick estimate from ${nf(r.shoes)} stored shoes · ±${nf(100*r.se,2)} u/100. A precise run takes about 5 seconds.`);
+  $('pbadge').hidden=!usePrecise;
   const mu=r.mu, vh=r.vh, pos=mu>0;
   const N0=pos?vh/mu/mu:Infinity, K=pos?vh/mu:Infinity, Bu=st.bank/U;
   const ror=pos?Math.exp(-2*Bu/K):1;
   const per=st.wong?'per 100 rounds dealt':'per 100 rounds played';
-  set('o-u',sgn(100*mu,2)); set('o-u2','units '+per);
+  set('o-u',sgn(100*mu,2)); set('o-u2','± '+nf(100*r.se,2)+' units '+per);
   set('o-hr',usd(mu*H*U)); set('o-hr2','SD '+usd(Math.sqrt(vh*H)*U)+' / hour');
   set('o-n0',pos?nf(N0):'–'); set('o-n02',pos?'rounds · '+nf(N0/H,0)+' h at '+H+'/hr':'not reached: this setup loses');
   set('o-ror',pos?pct(ror):'100%'); set('o-ror2',pos?'on '+usd(st.bank)+' at '+usd(U)+' units':'negative expectation');
   set('k-u',sgn(100*mu,2)); set('k-hr',usd(mu*H*U)); set('k-n0',pos?nf(N0):'–'); set('k-ror',pos?pct(ror):'100%');
 
-  set('d-u',sgn(100*mu,2)+' u · '+usd(100*mu*U));
+  set('d-u',sgn(100*mu,2)+' ± '+nf(100*r.se,2)+' u · '+usd(100*mu*U));
   set('d-sd',nf(10*Math.sqrt(vh),1)+' u · '+usd(10*Math.sqrt(vh)*U));
   set('d-di',pos?nf(1000/Math.sqrt(N0),1):'–');
   set('d-avg',nf(r.avgBet,2)+' u');
@@ -498,6 +597,7 @@ function init(){
   $('exit').addEventListener('change',e=>{st.exit=e.target.checked; go();}); num('exitv','exitv'); num('exita','exita',{min:0});
   $('exitbon').addEventListener('change',e=>{st.exitbon=e.target.checked; go();}); num('exitb','exitb',{min:0});
   $('wong').addEventListener('change',e=>{st.wong=e.target.checked; go();}); num('wongv','wongv');
+  $('precise').addEventListener('click',runPrecise);
   num('unit','unit',{min:1}); num('bank','bank',{min:0}); num('hph','hph',{min:1}); num('trip','trip',{min:0.5});
   sync();
 }
